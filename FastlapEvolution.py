@@ -63,6 +63,8 @@ ax.set_ylim(150, 265)
 ax.grid(axis="y", linestyle="--", alpha=0.4)
 ax.legend(fontsize=10)
 
+
+# Print graphic
 plt.tight_layout()
 plt.savefig("FastlapEvolution.png", dpi=150, bbox_inches="tight")
 plt.show()
