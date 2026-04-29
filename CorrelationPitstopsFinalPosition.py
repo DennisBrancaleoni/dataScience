@@ -1,42 +1,54 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 df = pd.read_csv("mainDataset.csv", low_memory=False)
-df_pit = df[["pit_stop_count", "finish_position"]].dropna()
+df_pit = df[["start_position", "finish_position", "pit_stop_count"]].dropna()
 
-avg_pos = (
-    df_pit.groupby("pit_stop_count")["finish_position"]
-    .agg(["mean", "count"])
-    .reset_index()
-    .rename(columns={"mean": "pos_media", "count": "n_gare"})
+# Limita a valori sensati
+df_pit = df_pit[
+    (df_pit["start_position"].between(1, 20)) &
+    (df_pit["finish_position"].between(1, 20)) &
+    (df_pit["pit_stop_count"].between(1, 6))
+]
+df_pit["start_position"] = df_pit["start_position"].astype(int)
+df_pit["finish_position"] = df_pit["finish_position"].astype(int)
+
+# Matrice: media pit stop per ogni combinazione start/finish
+heatmap_data = (
+    df_pit.groupby(["finish_position", "start_position"])["pit_stop_count"]
+    .mean()
+    .unstack(fill_value=np.nan)
 )
-avg_pos = avg_pos[avg_pos["n_gare"] >= 30]
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-fig.suptitle("Correlazione Pit Stop ↔ Posizione Finale", fontsize=14, fontweight="bold")
+fig, ax = plt.subplots(figsize=(12, 10))
 
-# Scatter
-axes[0].scatter(df_pit["pit_stop_count"], df_pit["finish_position"], alpha=0.1, s=8, color="steelblue")
-m, b = pd.Series(df_pit["pit_stop_count"]).corr(df_pit["finish_position"]), None
-import numpy as np
-coef = np.polyfit(df_pit["pit_stop_count"], df_pit["finish_position"], 1)
-x_line = range(int(df_pit["pit_stop_count"].min()), int(df_pit["pit_stop_count"].max()) + 1)
-axes[0].plot(x_line, [coef[0]*x + coef[1] for x in x_line], color="red", linewidth=2)
-axes[0].set_title("Scatter + Linea di Tendenza")
-axes[0].set_xlabel("Numero Pit Stop")
-axes[0].set_ylabel("Posizione Finale")
-r = df_pit["pit_stop_count"].corr(df_pit["finish_position"])
-axes[0].text(0.05, 0.92, f"r = {r:.2f}", transform=axes[0].transAxes, color="red", fontsize=10)
+im = ax.imshow(heatmap_data.values, cmap="coolwarm", aspect="auto",
+               vmin=1, vmax=3)
 
-# Posizione media per n° pit stop
-axes[1].bar(avg_pos["pit_stop_count"], avg_pos["pos_media"], color="steelblue", edgecolor="white")
-axes[1].set_title("Posizione Media per N° Pit Stop")
-axes[1].set_xlabel("Numero Pit Stop")
-axes[1].set_ylabel("Posizione Media")
-axes[1].invert_yaxis()
-for i, row in avg_pos.iterrows():
-    axes[1].text(row["pit_stop_count"], row["pos_media"] + 0.3, f"{row['pos_media']:.1f}", ha="center", fontsize=8)
+ax.set_xticks(range(len(heatmap_data.columns)))
+ax.set_xticklabels([f"P{int(c)}" for c in heatmap_data.columns], fontsize=9)
+ax.set_yticks(range(len(heatmap_data.index)))
+ax.set_yticklabels([f"P{int(i)}" for i in heatmap_data.index], fontsize=9)
+
+ax.set_xlabel("Start Position", fontsize=13)
+ax.set_ylabel("Finish Position", fontsize=13)
+ax.set_title("Average Pit Stops: Start Position vs Finish Position\n(color = avg pit stops)", fontsize=14, fontweight="bold")
+
+ax.invert_yaxis()
+
+
+# Valori nelle celle
+for i in range(len(heatmap_data.index)):
+    for j in range(len(heatmap_data.columns)):
+        val = heatmap_data.values[i, j]
+        if not np.isnan(val):
+            color = "white" if (val > 2.5 or val < 1.5) else "black"
+            ax.text(j, i, f"{val:.1f}", ha="center", va="center", fontsize=7, color=color)
+
+cbar = plt.colorbar(im, ax=ax, label="Average Pit Stops")
+cbar.set_ticks([1, 1.5, 2, 2.5, 3])
 
 plt.tight_layout()
-plt.savefig("pit_stop_correlation.png", dpi=150)
+plt.savefig("pit_stop_heatmap.png", dpi=150)
 plt.show()
